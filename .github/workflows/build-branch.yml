@@ -1,0 +1,34 @@
+# Fork-only helper (not part of any upstream PR): runs the repo's own build on a chosen
+# branch in GitHub Actions, then commits the regenerated INDEX.md and docs/ back to it.
+name: build-branch
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to build"
+        required: true
+        default: records-nov-2026
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ inputs.branch }}
+      - uses: actions/setup-node@v4.1.0
+        with:
+          node-version: "22"
+      - name: Install dependencies (lockfile)
+        run: npm ci
+      - name: Build (validates schema, regenerates INDEX.md and docs/)
+        run: node build.mjs
+      - name: Show what the build changed
+        run: git status --short && git diff --stat
+      - name: Commit regenerated output to the branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add INDEX.md docs
+          if git diff --cached --quiet; then echo "no changes"; else git commit -m "Rebuild INDEX.md and docs/ (node build.mjs)"; git push origin HEAD:${{ inputs.branch }}; fi
